@@ -21,7 +21,7 @@ void yyerror(char *s) {
 	else
 		token = 0;
 	
-	ngx_log_debug0(NGX_LOG_INFO, conf->log, 0, 
+	ngx_log_debug(NGX_LOG_INFO, conf->log, 0, 
 			"error parsing let expression: %s[%d]: %*s", s, inpos,
 			token ? token->len : 0, token ? (char*)token->data : "");
 	
@@ -50,7 +50,7 @@ ngx_let_node_t* ngx_let_binop_node_create(
 
 	yylval = node;
 	
-	ngx_log_debug0(NGX_LOG_INFO, conf->log, 0, "let operation reduce '%c'", op);
+	ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let operation reduce '%c'", op);
 
 	return node;
 }
@@ -106,7 +106,7 @@ int yylex() {
 
 		/* terminal */
 		
-		ngx_log_debug0(NGX_LOG_INFO, conf->log, 0, "let terminal '%c'", str->data[0]);
+		ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let terminal '%c'", str->data[0]);
 
 		return str->data[0];
 	}
@@ -118,7 +118,7 @@ int yylex() {
 		
 		/* variable */
 
-		ngx_log_debug0(NGX_LOG_INFO, conf->log, 0, "let variable %*s", str->len, str->data);
+		ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let variable %*s", str->len, str->data);
 		
 		str->data++;
 		str->len--;
@@ -130,7 +130,7 @@ int yylex() {
 
 		/* literal */
 		
-		ngx_log_debug0(NGX_LOG_INFO, conf->log, 0, "let literal %*s", str->len, str->data);
+		ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let literal %*s", str->len, str->data);
 		
 		node->type = NGX_LTYPE_LITERAL;
 		node->name = *str;

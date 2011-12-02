@@ -1,3 +1,13 @@
+----------------
+NGINX let module
+----------------
+
+Adds support for arithmetic operations to NGINX config.
+
+(c) 2011 Roman Arutyunyan, arut@qip.ru
+
+
+
 Build:
 ======
 
@@ -6,10 +16,51 @@ Add this when configuring NGNIX:
 ./configure --add-module=$PATH_TO_MODULE
 
 
+
+
 Examples:
 =========
 
+# adds variable $value equal to evaluated expression value
+
 let $value ( $uid + 0x12 ) * $offset - 100 ;
+
+let $remainer $number % 100 ;
+
+let $welcome "Hi, " . $user . ", you have " . $num . " data items";
+# echo $welcome ;
+
+
+
+IMPORTANT NOTE:
+
+let-module uses NGINX config parser as lexer.
+That means you should add spaces around each token.
+
+let $value (1+2);             # ERROR!
+let $value ( 1 + 2 );         # OK
+
+let $value 1 + (2 * $uid);    # ERROR!
+let $value 1 + ( 2 * $uid );  # OK
+
+
+
+Features supported:
+===================
+
+- operations with unsigned integers:
+
+  + - * / %
+
+- string operations:
+
+  . (concatenation)
+
+- hexadecimal numbers
+
+- grouping with parentheses
+
+
 
 Limitations:
 ============
@@ -18,7 +69,11 @@ Cannot use unnamed regex captures $1, $2,.. from location regex.
 
 Use named captures like "(?P<user>.*)" instead
 
+
+
 Notes:
 ======
 
-Use bison -d to rebuild parser generator if needed								
+Use the following command to rebuild parser generator if you need that
+
+bison -d let.y
