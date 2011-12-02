@@ -1,0 +1,24 @@
+Build:
+======
+
+Add this when configuring NGNIX:
+
+./configure --add-module=$PATH_TO_MODULE
+
+
+Examples:
+=========
+
+let $value ( $uid + 0x12 ) * $offset - 100 ;
+
+Limitations:
+============
+
+Cannot use unnamed regex captures $1, $2,.. from location regex.
+
+Use named captures like "(?P<user>.*)" instead
+
+Notes:
+======
+
+Use bison -d to rebuild parser generator if needed								
