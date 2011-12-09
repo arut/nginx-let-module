@@ -1,9 +1,21 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
+#include <stdlib.h>
+#include <time.h>
 #include "let.h"
 
 static char* ngx_http_let_let(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+static char* ngx_http_let_let_rand(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
+
+struct ngx_let_rand_info_s {
+
+	ngx_int_t from;
+
+	ngx_int_t to;
+};
+
+typedef struct ngx_let_rand_info_s ngx_let_rand_info_t;
 
 /* Module commands */
 static ngx_command_t ngx_http_let_commands[] = {
@@ -11,6 +23,13 @@ static ngx_command_t ngx_http_let_commands[] = {
 	{	ngx_string("let"),
 		NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
 		ngx_http_let_let,
+		NGX_HTTP_LOC_CONF_OFFSET,
+		0,
+		NULL },
+
+	{	ngx_string("let_rand"),
+		NGX_HTTP_LOC_CONF|NGX_CONF_TAKE3,
+		ngx_http_let_let_rand,
 		NGX_HTTP_LOC_CONF_OFFSET,
 		0,
 		NULL },
@@ -251,6 +270,27 @@ static ngx_int_t ngx_http_let_variable(ngx_http_request_t *r,
 	return ret;
 }
 
+static ngx_int_t ngx_http_let_rand_variable(ngx_http_request_t *r,
+		    ngx_http_variable_value_t *v, uintptr_t data)
+{
+	ngx_let_rand_info_t *ri = (ngx_let_rand_info_t*)data;
+
+	v->len = 64;
+	v->data = ngx_palloc(r->pool, v->len);
+
+	v->len = ngx_snprintf(v->data, v->len, "%d", 
+			(int)(ri->from + (int64_t)rand() * (ri->to - ri->from) / RAND_MAX)) - v->data;
+
+	v->valid = 1;
+	v->no_cacheable = 0;
+	v->not_found = 0;
+
+	ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+			"let rand variable accessed '%*s'", v->len, v->data);
+
+	return NGX_OK;
+}
+
 static char* ngx_http_let_let(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
 	ngx_str_t *value;
@@ -261,7 +301,7 @@ static char* ngx_http_let_let(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 	ngx_log_debug(NGX_LOG_INFO, cf->log, 0, "let command handler");
 
 	if (value[1].data[0] != '$')
-		return NGX_CONF_ERROR;
+		return "needs variable as the first argument";
 
 	value[1].data++;
 	value[1].len--;
@@ -270,6 +310,37 @@ static char* ngx_http_let_let(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 	v->get_handler = ngx_http_let_variable;
 	v->data = (uintptr_t)ngx_parse_let_expr(cf);
+	
+	return NGX_CONF_OK;
+}
+
+static char* ngx_http_let_let_rand(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+	ngx_str_t *value;
+	ngx_http_variable_t *v;
+	ngx_let_rand_info_t *ri;
+	
+	value = cf->args->elts;
+	
+	ngx_log_debug(NGX_LOG_INFO, cf->log, 0, "let_rand command handler");
+
+	if (value[1].data[0] != '$')
+		return "needs variable as the first argument";
+
+	value[1].data++;
+	value[1].len--;
+
+	v = ngx_http_add_variable(cf, &value[1], NGX_HTTP_VAR_CHANGEABLE);
+
+	ri = ngx_palloc(cf->pool, sizeof(ngx_let_rand_info_t));
+
+	ri->from = ngx_atoi(value[2].data, value[2].len);
+	ri->to = ngx_atoi(value[3].data, value[3].len);
+
+	v->get_handler = ngx_http_let_rand_variable;
+	v->data = (uintptr_t)ri;
+
+	srand(time(0));
 	
 	return NGX_CONF_OK;
 }

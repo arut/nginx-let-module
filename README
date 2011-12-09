@@ -30,6 +30,7 @@ let $remainer $number % 100 ;
 let $welcome "Hi, " . $user . ", you have " . $num . " data items";
 # echo $welcome ;
 
+let_rand $randval from to;
 
 
 IMPORTANT NOTE:
