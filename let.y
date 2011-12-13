@@ -66,6 +66,8 @@ ngx_let_node_t* ngx_let_binop_node_create(
 
 %left '*' '/' '%' '.' ;
 
+%left '&' '|' ;
+
 expr: '(' expr ')' { $$ = $2; }
 
 | NGXLEAF
@@ -79,6 +81,10 @@ expr: '(' expr ')' { $$ = $2; }
 | expr '+' expr    { $$ = ngx_let_binop_node_create($1, '+', $3); }
 
 | expr '-' expr    { $$ = ngx_let_binop_node_create($1, '-', $3); }
+
+| expr '&' expr    { $$ = ngx_let_binop_node_create($1, '&', $3); }
+
+| expr '|' expr    { $$ = ngx_let_binop_node_create($1, '|', $3); }
 
 | expr '.' expr    { $$ = ngx_let_binop_node_create($1, '.', $3); }
 
@@ -102,7 +108,7 @@ int yylex() {
 
 	str = ((ngx_str_t*)conf->args->elts + inpos);
 
-	if (str->len == 1 && strchr("+-*/%.()", str->data[0])) {
+	if (str->len == 1 && strchr("+-*/%&|.()", str->data[0])) {
 
 		/* terminal */
 		

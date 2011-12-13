@@ -127,6 +127,14 @@ static ngx_int_t ngx_let_apply_binary_integer_op(ngx_http_request_t *r, int op,
 			left %= right;
 			break;
 
+		case '&':
+			left &= right;
+			break;
+
+		case '|':
+			left |= right;
+			break;
+
 		default:
 			ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
 					"let unexpected operation '%c'", op);
@@ -212,7 +220,7 @@ static ngx_int_t ngx_let_get_node_value(ngx_http_request_t* r, ngx_let_node_t* n
 					return ret;
 			}
 			
-			if (strchr("+-*/%", node->index)) {
+			if (strchr("+-*/%&|", node->index)) {
 				
 				/* binary integer operation */
 
