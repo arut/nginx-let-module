@@ -7,3 +7,5 @@ NGX_ADDON_SRCS="$NGX_ADDON_SRCS \
 		$ngx_addon_dir/ngx_http_let_module.c \
 		$ngx_addon_dir/let.tab.c"
 
+CORE_LIBS="$CORE_LIBS -lcrypto"
+

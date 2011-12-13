@@ -39,11 +39,17 @@
    /* Put the tokens into the symbol table, so that GDB and other debuggers
       know about them.  */
    enum yytokentype {
-     NGXLEAF = 258
+     NGXLEAF = 258,
+     NGXFUNC = 259,
+     NGXFUNC0 = 260,
+     NGXDONE = 261
    };
 #endif
 /* Tokens.  */
 #define NGXLEAF 258
+#define NGXFUNC 259
+#define NGXFUNC0 260
+#define NGXDONE 261
 
 
 

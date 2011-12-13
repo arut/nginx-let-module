@@ -66,11 +66,17 @@
    /* Put the tokens into the symbol table, so that GDB and other debuggers
       know about them.  */
    enum yytokentype {
-     NGXLEAF = 258
+     NGXLEAF = 258,
+     NGXFUNC = 259,
+     NGXFUNC0 = 260,
+     NGXDONE = 261
    };
 #endif
 /* Tokens.  */
 #define NGXLEAF 258
+#define NGXFUNC 259
+#define NGXFUNC0 260
+#define NGXDONE 261
 
 
 
@@ -86,8 +92,9 @@
 
 #include <ngx_http.h>
 
-static ngx_conf_t* conf;
+static ngx_conf_t *conf;
 static unsigned inpos;
+static ngx_let_node_t *result;
 
 int yylex();
 
@@ -127,11 +134,30 @@ ngx_let_node_t* ngx_let_binop_node_create(
 	args[0] = left;
 	args[1] = right;
 
-	yylval = node;
+/*	yylval = node;*/
 	
 	ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let operation reduce '%c'", op);
 
 	return node;
+}
+
+ngx_let_node_t* ngx_let_fun_arg(
+	ngx_let_node_t* fun,
+	ngx_let_node_t* arg) 
+{
+	ngx_let_node_t** args;
+
+	if (!fun->args.nalloc)
+		ngx_array_init(&fun->args, conf->pool, 1, sizeof(ngx_let_node_t*));
+
+	args = ngx_array_push(&fun->args);
+	*args = arg;
+
+	ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let function argument: %d : %d", fun->type, arg->type);
+
+/*	yylval = fun;*/
+
+	return fun;
 }
 
 
@@ -167,7 +193,7 @@ typedef int YYSTYPE;
 
 
 /* Line 216 of yacc.c.  */
-#line 171 "let.tab.c"
+#line 197 "let.tab.c"
 
 #ifdef short
 # undef short
@@ -380,22 +406,22 @@ union yyalloc
 #endif
 
 /* YYFINAL -- State number of the termination state.  */
-#define YYFINAL  5
+#define YYFINAL  9
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   41
+#define YYLAST   55
 
 /* YYNTOKENS -- Number of terminals.  */
-#define YYNTOKENS  14
+#define YYNTOKENS  17
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  2
+#define YYNNTS  4
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  11
+#define YYNRULES  16
 /* YYNRULES -- Number of states.  */
-#define YYNSTATES  23
+#define YYNSTATES  30
 
 /* YYTRANSLATE(YYLEX) -- Bison symbol number corresponding to YYLEX.  */
 #define YYUNDEFTOK  2
-#define YYMAXUTOK   258
+#define YYMAXUTOK   261
 
 #define YYTRANSLATE(YYX)						\
   ((unsigned int) (YYX) <= YYMAXUTOK ? yytranslate[YYX] : YYUNDEFTOK)
@@ -406,8 +432,8 @@ static const yytype_uint8 yytranslate[] =
        0,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,     2,     2,     2,     2,     2,     2,     8,    10,     2,
-      12,    13,     6,     4,     2,     5,     9,     7,     2,     2,
+       2,     2,     2,     2,     2,     2,     2,    11,    13,     2,
+      15,    16,     9,     7,     2,     8,    12,    10,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -415,7 +441,7 @@ static const yytype_uint8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,     2,     2,     2,    11,     2,     2,     2,     2,     2,
+       2,     2,     2,     2,    14,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -428,7 +454,8 @@ static const yytype_uint8 yytranslate[] =
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
        2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-       2,     2,     2,     2,     2,     2,     1,     2,     3
+       2,     2,     2,     2,     2,     2,     1,     2,     3,     4,
+       5,     6
 };
 
 #if YYDEBUG
@@ -436,25 +463,26 @@ static const yytype_uint8 yytranslate[] =
    YYRHS.  */
 static const yytype_uint8 yyprhs[] =
 {
-       0,     0,     3,     7,     9,    13,    17,    21,    25,    29,
-      33,    37
+       0,     0,     3,     6,    10,    12,    14,    17,    21,    25,
+      29,    33,    37,    41,    45,    49,    51
 };
 
 /* YYRHS -- A `-1'-separated list of the rules' RHS.  */
 static const yytype_int8 yyrhs[] =
 {
-      15,     0,    -1,    12,    15,    13,    -1,     3,    -1,    15,
-       6,    15,    -1,    15,     7,    15,    -1,    15,     8,    15,
-      -1,    15,     4,    15,    -1,    15,     5,    15,    -1,    15,
-      10,    15,    -1,    15,    11,    15,    -1,    15,     9,    15,
-      -1
+      18,     0,    -1,    19,     6,    -1,    15,    19,    16,    -1,
+       3,    -1,     5,    -1,    20,    16,    -1,    19,     9,    19,
+      -1,    19,    10,    19,    -1,    19,    11,    19,    -1,    19,
+       7,    19,    -1,    19,     8,    19,    -1,    19,    13,    19,
+      -1,    19,    14,    19,    -1,    19,    12,    19,    -1,     4,
+      -1,    20,    19,    -1
 };
 
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,    71,    71,    73,    75,    77,    79,    81,    83,    85,
-      87,    89
+       0,    91,    91,    93,    95,    97,    99,   101,   103,   105,
+     107,   109,   111,   113,   115,   119,   121
 };
 #endif
 
@@ -463,8 +491,9 @@ static const yytype_uint8 yyrline[] =
    First, the terminals, then, starting at YYNTOKENS, nonterminals.  */
 static const char *const yytname[] =
 {
-  "$end", "error", "$undefined", "NGXLEAF", "'+'", "'-'", "'*'", "'/'",
-  "'%'", "'.'", "'&'", "'|'", "'('", "')'", "$accept", "expr", 0
+  "$end", "error", "$undefined", "NGXLEAF", "NGXFUNC", "NGXFUNC0",
+  "NGXDONE", "'+'", "'-'", "'*'", "'/'", "'%'", "'.'", "'&'", "'|'", "'('",
+  "')'", "$accept", "letexpr", "expr", "funopen", 0
 };
 #endif
 
@@ -473,23 +502,23 @@ static const char *const yytname[] =
    token YYLEX-NUM.  */
 static const yytype_uint16 yytoknum[] =
 {
-       0,   256,   257,   258,    43,    45,    42,    47,    37,    46,
-      38,   124,    40,    41
+       0,   256,   257,   258,   259,   260,   261,    43,    45,    42,
+      47,    37,    46,    38,   124,    40,    41
 };
 # endif
 
 /* YYR1[YYN] -- Symbol number of symbol that rule YYN derives.  */
 static const yytype_uint8 yyr1[] =
 {
-       0,    14,    15,    15,    15,    15,    15,    15,    15,    15,
-      15,    15
+       0,    17,    18,    19,    19,    19,    19,    19,    19,    19,
+      19,    19,    19,    19,    19,    20,    20
 };
 
 /* YYR2[YYN] -- Number of symbols composing right hand side of rule YYN.  */
 static const yytype_uint8 yyr2[] =
 {
-       0,     2,     3,     1,     3,     3,     3,     3,     3,     3,
-       3,     3
+       0,     2,     2,     3,     1,     1,     2,     3,     3,     3,
+       3,     3,     3,     3,     3,     1,     2
 };
 
 /* YYDEFACT[STATE-NAME] -- Default rule to reduce with in state
@@ -497,31 +526,31 @@ static const yytype_uint8 yyr2[] =
    means the default is an error.  */
 static const yytype_uint8 yydefact[] =
 {
-       0,     3,     0,     0,     0,     1,     0,     0,     0,     0,
-       0,     0,     0,     0,     2,     7,     8,     4,     5,     6,
-      11,     9,    10
+       0,     4,    15,     5,     0,     0,     0,     0,     0,     1,
+       2,     0,     0,     0,     0,     0,     0,     0,     0,     6,
+      16,     3,    10,    11,     7,     8,     9,    14,    12,    13
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-      -1,     3
+      -1,     5,     6,     7
 };
 
 /* YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
    STATE-NUM.  */
-#define YYPACT_NINF -10
+#define YYPACT_NINF -13
 static const yytype_int8 yypact[] =
 {
-      29,   -10,    29,     0,    20,   -10,    29,    29,    29,    29,
-      29,    29,    29,    29,   -10,    28,    28,    -9,    -9,    -9,
-      -9,   -10,   -10
+      15,   -13,   -13,   -13,    15,    29,    35,     1,    24,   -13,
+     -13,    15,    15,    15,    15,    15,    15,    15,    15,   -13,
+      14,   -13,    41,    41,   -12,   -12,   -12,   -12,   -13,   -13
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -10,    10
+     -13,   -13,    -4,   -13
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]].  What to do in state STATE-NUM.  If
@@ -531,29 +560,31 @@ static const yytype_int8 yypgoto[] =
 #define YYTABLE_NINF -1
 static const yytype_uint8 yytable[] =
 {
-       5,    12,    13,     0,     6,     7,     8,     9,    10,    11,
-      12,    13,     4,     0,     0,     0,    15,    16,    17,    18,
-      19,    20,    21,    22,     6,     7,     8,     9,    10,    11,
-      12,    13,     1,    14,     8,     9,    10,    11,    12,    13,
-       0,     2
+       8,    17,    18,    20,     1,     2,     3,    22,    23,    24,
+      25,    26,    27,    28,    29,     0,     4,    19,     1,     2,
+       3,    11,    12,    13,    14,    15,    16,    17,    18,     9,
+       4,    11,    12,    13,    14,    15,    16,    17,    18,     0,
+      21,    10,    11,    12,    13,    14,    15,    16,    17,    18,
+      13,    14,    15,    16,    17,    18
 };
 
 static const yytype_int8 yycheck[] =
 {
-       0,    10,    11,    -1,     4,     5,     6,     7,     8,     9,
-      10,    11,     2,    -1,    -1,    -1,     6,     7,     8,     9,
-      10,    11,    12,    13,     4,     5,     6,     7,     8,     9,
-      10,    11,     3,    13,     6,     7,     8,     9,    10,    11,
-      -1,    12
+       4,    13,    14,     7,     3,     4,     5,    11,    12,    13,
+      14,    15,    16,    17,    18,    -1,    15,    16,     3,     4,
+       5,     7,     8,     9,    10,    11,    12,    13,    14,     0,
+      15,     7,     8,     9,    10,    11,    12,    13,    14,    -1,
+      16,     6,     7,     8,     9,    10,    11,    12,    13,    14,
+       9,    10,    11,    12,    13,    14
 };
 
 /* YYSTOS[STATE-NUM] -- The (internal number of the) accessing
    symbol of state STATE-NUM.  */
 static const yytype_uint8 yystos[] =
 {
-       0,     3,    12,    15,    15,     0,     4,     5,     6,     7,
-       8,     9,    10,    11,    13,    15,    15,    15,    15,    15,
-      15,    15,    15
+       0,     3,     4,     5,    15,    18,    19,    20,    19,     0,
+       6,     7,     8,     9,    10,    11,    12,    13,    14,    16,
+      19,    16,    19,    19,    19,    19,    19,    19,    19,    19
 };
 
 #define yyerrok		(yyerrstatus = 0)
@@ -1368,53 +1399,63 @@ yyreduce:
   switch (yyn)
     {
         case 2:
-#line 71 "let.y"
+#line 91 "let.y"
+    { result = (yyvsp[(1) - (2)]); YYACCEPT; ;}
+    break;
+
+  case 3:
+#line 93 "let.y"
     { (yyval) = (yyvsp[(2) - (3)]); ;}
     break;
 
-  case 4:
-#line 75 "let.y"
+  case 7:
+#line 101 "let.y"
     { (yyval) = ngx_let_binop_node_create((yyvsp[(1) - (3)]), '*', (yyvsp[(3) - (3)])); ;}
     break;
 
-  case 5:
-#line 77 "let.y"
+  case 8:
+#line 103 "let.y"
     { (yyval) = ngx_let_binop_node_create((yyvsp[(1) - (3)]), '/', (yyvsp[(3) - (3)])); ;}
     break;
 
-  case 6:
-#line 79 "let.y"
+  case 9:
+#line 105 "let.y"
     { (yyval) = ngx_let_binop_node_create((yyvsp[(1) - (3)]), '%', (yyvsp[(3) - (3)])); ;}
     break;
 
-  case 7:
-#line 81 "let.y"
+  case 10:
+#line 107 "let.y"
     { (yyval) = ngx_let_binop_node_create((yyvsp[(1) - (3)]), '+', (yyvsp[(3) - (3)])); ;}
     break;
 
-  case 8:
-#line 83 "let.y"
+  case 11:
+#line 109 "let.y"
     { (yyval) = ngx_let_binop_node_create((yyvsp[(1) - (3)]), '-', (yyvsp[(3) - (3)])); ;}
     break;
 
-  case 9:
-#line 85 "let.y"
+  case 12:
+#line 111 "let.y"
     { (yyval) = ngx_let_binop_node_create((yyvsp[(1) - (3)]), '&', (yyvsp[(3) - (3)])); ;}
     break;
 
-  case 10:
-#line 87 "let.y"
+  case 13:
+#line 113 "let.y"
     { (yyval) = ngx_let_binop_node_create((yyvsp[(1) - (3)]), '|', (yyvsp[(3) - (3)])); ;}
     break;
 
-  case 11:
-#line 89 "let.y"
+  case 14:
+#line 115 "let.y"
     { (yyval) = ngx_let_binop_node_create((yyvsp[(1) - (3)]), '.', (yyvsp[(3) - (3)])); ;}
+    break;
+
+  case 16:
+#line 121 "let.y"
+    { (yyval) = ngx_let_fun_arg((yyvsp[(1) - (2)]), (yyvsp[(2) - (2)])); ;}
     break;
 
 
 /* Line 1267 of yacc.c.  */
-#line 1418 "let.tab.c"
+#line 1459 "let.tab.c"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -1628,7 +1669,7 @@ yyreturn:
 }
 
 
-#line 93 "let.y"
+#line 125 "let.y"
 
 
 int yylex() {
@@ -1642,7 +1683,7 @@ int yylex() {
 		|| conf->args == NULL
 		|| conf->args->nelts <= inpos)
 	{
-		return EOF;
+		return NGXDONE;
 	}
 
 	str = ((ngx_str_t*)conf->args->elts + inpos);
@@ -1650,6 +1691,8 @@ int yylex() {
 	if (str->len == 1 && strchr("+-*/%&|.()", str->data[0])) {
 
 		/* terminal */
+
+		yylval = 0;
 		
 		ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let terminal '%c'", str->data[0]);
 
@@ -1671,6 +1714,33 @@ int yylex() {
 		node->type = NGX_LTYPE_VARIABLE;
 		node->index = ngx_http_get_variable_index(conf, str);
 
+		return NGXLEAF;
+
+	} else if (str->len > 2 && str->data[str->len - 2] == '(' 
+			&& str->data[str->len - 1] == ')') {
+
+		/* function w/o arguments*/
+
+		ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let function0 %*s", str->len - 1, str->data);
+
+		node->type = NGX_LTYPE_FUNCTION;
+		node->name = *str;
+		node->name.len -= 2;
+
+		return NGXFUNC0;
+
+	} else if (str->len > 1 && str->data[str->len - 1] == '(' ) {
+
+		/* function */
+
+		ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let function %*s", str->len - 1, str->data);
+
+		node->type = NGX_LTYPE_FUNCTION;
+		node->name = *str;
+		node->name.len--;
+
+		return NGXFUNC;
+
 	} else {
 
 		/* literal */
@@ -1679,16 +1749,17 @@ int yylex() {
 		
 		node->type = NGX_LTYPE_LITERAL;
 		node->name = *str;
+
+		return NGXLEAF;
 	}
-	
-	return NGXLEAF;
 }
 
 ngx_let_node_t* ngx_parse_let_expr(ngx_conf_t* cf) {
 	conf = cf;
 	inpos = 1; /* #1 is dest variable */
+	result = 0;
 	yyparse();
-	return yylval;
+	return result;
 }
 
 

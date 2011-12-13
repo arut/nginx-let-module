@@ -7,8 +7,9 @@
 
 #include <ngx_http.h>
 
-static ngx_conf_t* conf;
+static ngx_conf_t *conf;
 static unsigned inpos;
+static ngx_let_node_t *result;
 
 int yylex();
 
@@ -48,11 +49,30 @@ ngx_let_node_t* ngx_let_binop_node_create(
 	args[0] = left;
 	args[1] = right;
 
-	yylval = node;
+/*	yylval = node;*/
 	
 	ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let operation reduce '%c'", op);
 
 	return node;
+}
+
+ngx_let_node_t* ngx_let_fun_arg(
+	ngx_let_node_t* fun,
+	ngx_let_node_t* arg) 
+{
+	ngx_let_node_t** args;
+
+	if (!fun->args.nalloc)
+		ngx_array_init(&fun->args, conf->pool, 1, sizeof(ngx_let_node_t*));
+
+	args = ngx_array_push(&fun->args);
+	*args = arg;
+
+	ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let function argument: %d : %d", fun->type, arg->type);
+
+/*	yylval = fun;*/
+
+	return fun;
 }
 
 %}
@@ -60,7 +80,7 @@ ngx_let_node_t* ngx_let_binop_node_create(
 
 %%
 
-%token NGXLEAF ;
+%token NGXLEAF NGXFUNC NGXFUNC0 NGXDONE;
 
 %left '+' '-' ;
 
@@ -68,9 +88,15 @@ ngx_let_node_t* ngx_let_binop_node_create(
 
 %left '&' '|' ;
 
+letexpr : expr NGXDONE { result = $1; YYACCEPT; }
+
 expr: '(' expr ')' { $$ = $2; }
 
 | NGXLEAF
+
+| NGXFUNC0
+
+| funopen ')'
 
 | expr '*' expr    { $$ = ngx_let_binop_node_create($1, '*', $3); }
  
@@ -90,6 +116,12 @@ expr: '(' expr ')' { $$ = $2; }
 
 ;
 
+funopen: NGXFUNC
+
+| funopen expr     { $$ = ngx_let_fun_arg($1, $2); }
+
+;
+
 %%
 
 int yylex() {
@@ -103,7 +135,7 @@ int yylex() {
 		|| conf->args == NULL
 		|| conf->args->nelts <= inpos)
 	{
-		return EOF;
+		return NGXDONE;
 	}
 
 	str = ((ngx_str_t*)conf->args->elts + inpos);
@@ -111,6 +143,8 @@ int yylex() {
 	if (str->len == 1 && strchr("+-*/%&|.()", str->data[0])) {
 
 		/* terminal */
+
+		yylval = 0;
 		
 		ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let terminal '%c'", str->data[0]);
 
@@ -132,6 +166,33 @@ int yylex() {
 		node->type = NGX_LTYPE_VARIABLE;
 		node->index = ngx_http_get_variable_index(conf, str);
 
+		return NGXLEAF;
+
+	} else if (str->len > 2 && str->data[str->len - 2] == '(' 
+			&& str->data[str->len - 1] == ')') {
+
+		/* function w/o arguments*/
+
+		ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let function0 %*s", str->len - 1, str->data);
+
+		node->type = NGX_LTYPE_FUNCTION;
+		node->name = *str;
+		node->name.len -= 2;
+
+		return NGXFUNC0;
+
+	} else if (str->len > 1 && str->data[str->len - 1] == '(' ) {
+
+		/* function */
+
+		ngx_log_debug(NGX_LOG_INFO, conf->log, 0, "let function %*s", str->len - 1, str->data);
+
+		node->type = NGX_LTYPE_FUNCTION;
+		node->name = *str;
+		node->name.len--;
+
+		return NGXFUNC;
+
 	} else {
 
 		/* literal */
@@ -140,15 +201,16 @@ int yylex() {
 		
 		node->type = NGX_LTYPE_LITERAL;
 		node->name = *str;
+
+		return NGXLEAF;
 	}
-	
-	return NGXLEAF;
 }
 
 ngx_let_node_t* ngx_parse_let_expr(ngx_conf_t* cf) {
 	conf = cf;
 	inpos = 1; /* #1 is dest variable */
+	result = 0;
 	yyparse();
-	return yylval;
+	return result;
 }
 

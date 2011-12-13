@@ -5,17 +5,13 @@
 #include <time.h>
 #include "let.h"
 
+#include <openssl/md2.h>
+#include <openssl/md4.h>
+#include <openssl/md5.h>
+#include <openssl/sha.h>
+#include <openssl/ripemd.h>
+
 static char* ngx_http_let_let(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
-static char* ngx_http_let_let_rand(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
-
-struct ngx_let_rand_info_s {
-
-	ngx_int_t from;
-
-	ngx_int_t to;
-};
-
-typedef struct ngx_let_rand_info_s ngx_let_rand_info_t;
 
 /* Module commands */
 static ngx_command_t ngx_http_let_commands[] = {
@@ -23,13 +19,6 @@ static ngx_command_t ngx_http_let_commands[] = {
 	{	ngx_string("let"),
 		NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
 		ngx_http_let_let,
-		NGX_HTTP_LOC_CONF_OFFSET,
-		0,
-		NULL },
-
-	{	ngx_string("let_rand"),
-		NGX_HTTP_LOC_CONF|NGX_CONF_TAKE3,
-		ngx_http_let_let_rand,
 		NGX_HTTP_LOC_CONF_OFFSET,
 		0,
 		NULL },
@@ -76,6 +65,175 @@ static ngx_int_t ngx_let_toi(ngx_str_t* s)
 		: ngx_atoi(s->data, s->len);
 }
 
+/* Function engine */
+static ngx_int_t ngx_let_func_rand(ngx_http_request_t *r, ngx_str_t *ret)
+{
+	ret->len = 32;
+	ret->data = ngx_palloc(r->pool, ret->len);
+
+	ret->len = ngx_snprintf(ret->data, ret->len, "%d", rand()) - ret->data;
+
+	return NGX_OK;
+}
+
+#define NGX_LET_HASHFUNC(fun, name, hashlen) \
+static ngx_int_t ngx_let_func_##name(ngx_http_request_t *r, \
+		ngx_str_t *arg, ngx_str_t *ret) \
+{ \
+	u_char md[hashlen]; \
+	unsigned n; \
+	u_char *s; \
+	static u_char hex[] = "0123456789abcdef"; \
+\
+	ret->len = sizeof(md) * 2; \
+	ret->data = ngx_palloc(r->pool, ret->len); \
+\
+	fun(arg->data, arg->len, md); \
+\
+	for(n = 0, s = ret->data; n < sizeof(md); ++n) { \
+		*s++ = hex[(md[n] >> 4) & 0x0f]; \
+		*s++ = hex[md[n] & 0x0f]; \
+	} \
+\
+	return NGX_OK; \
+}
+
+NGX_LET_HASHFUNC(MD2, md2, 16)
+NGX_LET_HASHFUNC(MD4, md4, 16)
+NGX_LET_HASHFUNC(MD5, md5, 16)
+
+NGX_LET_HASHFUNC(SHA1,   sha1,   20)
+NGX_LET_HASHFUNC(SHA224, sha224, 28)
+NGX_LET_HASHFUNC(SHA256, sha256, 32)
+NGX_LET_HASHFUNC(SHA384, sha384, 48)
+NGX_LET_HASHFUNC(SHA512, sha512, 64)
+
+NGX_LET_HASHFUNC(RIPEMD160, ripemd160, 20)
+
+static ngx_int_t ngx_let_func_length(ngx_http_request_t *r, 
+		ngx_str_t *str, ngx_str_t *ret)
+{
+	ret->len = 32;
+	ret->data = ngx_palloc(r->pool, ret->len);
+
+	ret->len = ngx_snprintf(ret->data, ret->len, "%d", str->len) - ret->data;
+
+	return NGX_OK;
+}
+
+#define NGX_LET_ICMPFUNC(name, op) \
+static ngx_int_t ngx_let_func_##name(ngx_http_request_t *r, \
+		ngx_str_t *a1, ngx_str_t *a2, ngx_str_t *ret) \
+{ \
+	ngx_int_t v1, v2; \
+	ret->len = 32; \
+	ret->data = ngx_palloc(r->pool, ret->len); \
+\
+	v1 = ngx_atoi(a1->data, a1->len); \
+	v2 = ngx_atoi(a2->data, a2->len); \
+\
+	ret->len = ngx_snprintf(ret->data, ret->len, "%d", \
+		v1 op v2 ? v1 : v2) - ret->data; \
+\
+	return NGX_OK; \
+}
+
+NGX_LET_ICMPFUNC(min, <)
+NGX_LET_ICMPFUNC(max, >)
+
+static ngx_int_t ngx_let_func_substr(ngx_http_request_t *r, 
+		ngx_str_t *str, ngx_str_t *offset,
+		ngx_str_t *length, ngx_str_t *ret)
+{
+	ngx_int_t offs, len;
+
+	*ret = *str;
+
+	offs = ngx_atoi(offset->data, offset->len);
+	len = ngx_atoi(length->data, length->len);
+
+	if (offs >= (ngx_int_t)ret->len) {
+		ret->len = 0;
+		return NGX_OK;
+	}
+
+	ret->data += offs;
+
+	if (!len || offs + len >= (ngx_int_t)ret->len)
+		ret->len -= offs;
+	else
+		ret->len = len;
+
+	return NGX_OK;
+}
+
+/* Call function by name & return result */
+static ngx_int_t ngx_let_call_fun(ngx_http_request_t *r,
+		ngx_str_t *name, ngx_array_t *args, ngx_str_t *value)
+{
+	ngx_str_t *sargs = args->elts;
+
+	/* TODO: implement hashtable for faster lookup */
+
+#define IF_FUNC(nm, nargs) \
+	if (sizeof(#nm) - 1 == name->len \
+			&& !ngx_strncmp(#nm, name->data, name->len)) { \
+		if (nargs != args->nelts) { \
+			ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, \
+				"let function '%*s' expects %d arguments, %d provided", \
+					name->len, name->data, nargs, args->nelts); \
+			return NGX_ERROR; \
+		}
+
+#define CALL_FUNC_0(nm) \
+	IF_FUNC(nm, 0) \
+		return ngx_let_func_##nm(r, value); \
+	}
+
+#define CALL_FUNC_1(nm) \
+	IF_FUNC(nm, 1) \
+		return ngx_let_func_##nm(r, sargs, value); \
+	}
+
+#define CALL_FUNC_2(nm) \
+	IF_FUNC(nm, 2) \
+		return ngx_let_func_##nm(r, sargs, sargs + 1, value); \
+	}
+
+#define CALL_FUNC_3(nm) \
+	IF_FUNC(nm, 3) \
+		return ngx_let_func_##nm(r, sargs, sargs + 1, sargs + 2, value); \
+	}
+	
+	CALL_FUNC_0(rand);
+
+	/* cryptographic hashes */
+	CALL_FUNC_1(md2);
+	CALL_FUNC_1(md4);
+	CALL_FUNC_1(md5);
+
+	CALL_FUNC_1(sha1);
+	CALL_FUNC_1(sha224);
+	CALL_FUNC_1(sha256);
+	CALL_FUNC_1(sha384);
+	CALL_FUNC_1(sha512);
+
+	CALL_FUNC_1(ripemd160);
+
+	/* string operations */
+	CALL_FUNC_1(length);
+	CALL_FUNC_3(substr);
+
+	/* integer operations */
+	CALL_FUNC_2(max);
+	CALL_FUNC_2(min);
+
+	ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"let undefined function '%*s'", name->len, name->data);
+
+	return NGX_ERROR;
+}
+
 /* Processes positive integers only */
 static ngx_int_t ngx_let_apply_binary_integer_op(ngx_http_request_t *r, int op, 
 		ngx_array_t* args, ngx_str_t* value)
@@ -85,7 +243,7 @@ static ngx_int_t ngx_let_apply_binary_integer_op(ngx_http_request_t *r, int op,
 	unsigned sz;
 
 	if (args->nelts != 2) {
-		ngx_log_debug(NGX_LOG_INFO, r->connection->log, 0, 
+		ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
 				"let not enough argument for binary operation");
 		return NGX_ERROR;
 	}
@@ -100,7 +258,7 @@ static ngx_int_t ngx_let_apply_binary_integer_op(ngx_http_request_t *r, int op,
 	}
 	
 	if (left == NGX_ERROR || right == NGX_ERROR) {
-		ngx_log_debug(NGX_LOG_INFO, r->connection->log, 0, 
+		ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
 				"let error parsing argument '%*s'", str->len, str->data);
 		return NGX_ERROR;
 	}
@@ -201,6 +359,32 @@ static ngx_int_t ngx_let_get_node_value(ngx_http_request_t* r, ngx_let_node_t* n
 						"let getting literal: '%*s'", value->len, value->data);
 			
 			break;
+
+		case NGX_LTYPE_FUNCTION:
+
+			ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+						"let calling function '%*s'; argc: %d", 
+						node->name.len, node->name.data, node->args.nelts);
+			
+			/* parse arguments */
+			ngx_array_init(&args, r->pool, node->args.nelts, sizeof(ngx_str_t));
+
+			astr = ngx_array_push_n(&args, node->args.nelts);
+			anode = node->args.elts;
+		
+			for(n = 0; n < node->args.nelts; ++n) {
+				
+				ret = ngx_let_get_node_value(r, *anode++, astr++);
+				if (ret != NGX_OK)
+					return ret;
+			}
+
+			ret = ngx_let_call_fun(r, &node->name, &args, value);
+
+			if (ret != NGX_OK)
+				return ret;
+
+			break;
 			
 		case NGX_LTYPE_OPERATION:
 			
@@ -278,31 +462,12 @@ static ngx_int_t ngx_http_let_variable(ngx_http_request_t *r,
 	return ret;
 }
 
-static ngx_int_t ngx_http_let_rand_variable(ngx_http_request_t *r,
-		    ngx_http_variable_value_t *v, uintptr_t data)
-{
-	ngx_let_rand_info_t *ri = (ngx_let_rand_info_t*)data;
-
-	v->len = 64;
-	v->data = ngx_palloc(r->pool, v->len);
-
-	v->len = ngx_snprintf(v->data, v->len, "%d", 
-			(int)(ri->from + (int64_t)rand() * (ri->to - ri->from) / RAND_MAX)) - v->data;
-
-	v->valid = 1;
-	v->no_cacheable = 0;
-	v->not_found = 0;
-
-	ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
-			"let rand variable accessed '%*s'", v->len, v->data);
-
-	return NGX_OK;
-}
-
 static char* ngx_http_let_let(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 {
 	ngx_str_t *value;
 	ngx_http_variable_t *v;
+
+	srand(time(0));
 	
 	value = cf->args->elts;
 	
@@ -318,37 +483,6 @@ static char* ngx_http_let_let(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
 	v->get_handler = ngx_http_let_variable;
 	v->data = (uintptr_t)ngx_parse_let_expr(cf);
-	
-	return NGX_CONF_OK;
-}
-
-static char* ngx_http_let_let_rand(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
-{
-	ngx_str_t *value;
-	ngx_http_variable_t *v;
-	ngx_let_rand_info_t *ri;
-	
-	value = cf->args->elts;
-	
-	ngx_log_debug(NGX_LOG_INFO, cf->log, 0, "let_rand command handler");
-
-	if (value[1].data[0] != '$')
-		return "needs variable as the first argument";
-
-	value[1].data++;
-	value[1].len--;
-
-	v = ngx_http_add_variable(cf, &value[1], NGX_HTTP_VAR_CHANGEABLE);
-
-	ri = ngx_palloc(cf->pool, sizeof(ngx_let_rand_info_t));
-
-	ri->from = ngx_atoi(value[2].data, value[2].len);
-	ri->to = ngx_atoi(value[3].data, value[3].len);
-
-	v->get_handler = ngx_http_let_rand_variable;
-	v->data = (uintptr_t)ri;
-
-	srand(time(0));
 	
 	return NGX_CONF_OK;
 }
