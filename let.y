@@ -154,7 +154,7 @@ int yylex() {
 	node = ngx_pcalloc(conf->pool, sizeof(ngx_let_node_t));
 	yylval = node;
 
-	if (str->len && str->data[0] == '$') {
+	if (str->len > 1 && str->data[0] == '$') {
 		
 		/* variable */
 
@@ -163,8 +163,17 @@ int yylex() {
 		str->data++;
 		str->len--;
 		
-		node->type = NGX_LTYPE_VARIABLE;
-		node->index = ngx_http_get_variable_index(conf, str);
+		if (str->data[0] >= '1' && str->data[0] <= '9') {
+
+			node->type = NGX_LTYPE_CAPTURE;
+			node->index = str->data[0] - '0';
+
+		} else {
+
+			node->type = NGX_LTYPE_VARIABLE;
+			node->index = ngx_http_get_variable_index(conf, str);
+
+		}
 
 		return NGXLEAF;
 

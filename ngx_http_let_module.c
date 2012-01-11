@@ -5,7 +5,6 @@
 #include <time.h>
 #include "let.h"
 
-#include <openssl/md2.h>
 #include <openssl/md4.h>
 #include <openssl/md5.h>
 #include <openssl/sha.h>
@@ -98,7 +97,6 @@ static ngx_int_t ngx_let_func_##name(ngx_http_request_t *r, \
 	return NGX_OK; \
 }
 
-NGX_LET_HASHFUNC(MD2, md2, 16)
 NGX_LET_HASHFUNC(MD4, md4, 16)
 NGX_LET_HASHFUNC(MD5, md5, 16)
 
@@ -208,7 +206,6 @@ static ngx_int_t ngx_let_call_fun(ngx_http_request_t *r,
 	CALL_FUNC_0(rand);
 
 	/* cryptographic hashes */
-	CALL_FUNC_1(md2);
 	CALL_FUNC_1(md4);
 	CALL_FUNC_1(md5);
 
@@ -323,6 +320,8 @@ static ngx_int_t ngx_let_get_node_value(ngx_http_request_t* r, ngx_let_node_t* n
 	ngx_uint_t n;
 	ngx_int_t ret;
 	u_char* s;
+	int *cap;
+	ngx_int_t ncap;
 
 	if (node == NULL) {
 		ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
@@ -348,6 +347,23 @@ static ngx_int_t ngx_let_get_node_value(ngx_http_request_t* r, ngx_let_node_t* n
 			
 			ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
 						"let getting variable %d: '%*s'", node->index, value->len, value->data);
+
+			break;
+
+		case NGX_LTYPE_CAPTURE:
+
+			if (node->index >= (ngx_int_t)r->ncaptures)
+				return NGX_ERROR;
+
+			cap = r->captures;
+
+			ncap = node->index * 2;
+
+			value->data = r->captures_data + cap[ncap];
+			value->len = cap[ncap + 1] - cap[ncap];
+
+			ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+						"let getting capture %d: '%*s'", node->index, value->len, value->data);
 
 			break;
 			

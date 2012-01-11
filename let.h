@@ -8,6 +8,7 @@
 #define NGX_LTYPE_LITERAL   2
 #define NGX_LTYPE_OPERATION 3
 #define NGX_LTYPE_FUNCTION  4
+#define NGX_LTYPE_CAPTURE   5
 
 struct ngx_let_node_s {
 	
@@ -17,7 +18,7 @@ struct ngx_let_node_s {
 
 		ngx_str_t name;   /* literal value / operation name / function name */
 
-		ngx_int_t index;  /* variable index */
+		ngx_int_t index;  /* variable / capture index */
 	};
 
 	ngx_array_t args;     /* argument node pointers */
