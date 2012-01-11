@@ -63,15 +63,6 @@ Features supported:
 
 
 
-Limitations:
-============
-
-Cannot use unnamed regex captures $1, $2,.. from location regex.
-
-Use named captures like "(?P<user>.*)" instead
-
-
-
 Notes:
 ======
 
