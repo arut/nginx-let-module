@@ -177,7 +177,7 @@ static ngx_int_t ngx_let_call_fun(ngx_http_request_t *r,
 	if (sizeof(#nm) - 1 == name->len \
 			&& !ngx_strncmp(#nm, name->data, name->len)) { \
 		if (nargs != args->nelts) { \
-			ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, \
+			ngx_log_debug4(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, \
 				"let function '%*s' expects %d arguments, %d provided", \
 					name->len, name->data, nargs, args->nelts); \
 			return NGX_ERROR; \
@@ -225,7 +225,7 @@ static ngx_int_t ngx_let_call_fun(ngx_http_request_t *r,
 	CALL_FUNC_2(max);
 	CALL_FUNC_2(min);
 
-	ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+	ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0,
 				"let undefined function '%*s'", name->len, name->data);
 
 	return NGX_ERROR;
@@ -236,11 +236,11 @@ static ngx_int_t ngx_let_apply_binary_integer_op(ngx_http_request_t *r, int op,
 		ngx_array_t* args, ngx_str_t* value)
 {
 	ngx_str_t* str;
-	int orig_left, left, right;
+	int left, right;
 	unsigned sz;
 
 	if (args->nelts != 2) {
-		ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+		ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0, 
 				"let not enough argument for binary operation");
 		return NGX_ERROR;
 	}
@@ -249,13 +249,12 @@ static ngx_int_t ngx_let_apply_binary_integer_op(ngx_http_request_t *r, int op,
 
 	left = ngx_let_toi(str);
 	if (left != NGX_ERROR) {
-		orig_left = left;
 		++str;
 		right = ngx_let_toi(str);
 	}
 	
 	if (left == NGX_ERROR || right == NGX_ERROR) {
-		ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+		ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0, 
 				"let error parsing argument '%*s'", str->len, str->data);
 		return NGX_ERROR;
 	}
@@ -291,7 +290,7 @@ static ngx_int_t ngx_let_apply_binary_integer_op(ngx_http_request_t *r, int op,
 			break;
 
 		default:
-			ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+			ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0, 
 					"let unexpected operation '%c'", op);
 			return NGX_ERROR;
 	}
@@ -304,8 +303,8 @@ static ngx_int_t ngx_let_apply_binary_integer_op(ngx_http_request_t *r, int op,
 	if (sz < value->len)
 		value->len = sz;
 	
-	ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
-			"let applying binary operation %d '%c' %d: %d", orig_left, op, right, left);
+	ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+			"let applying binary operation '%c' %d: %d", op, right, left);
 
 	return NGX_OK;
 }
@@ -324,7 +323,7 @@ static ngx_int_t ngx_let_get_node_value(ngx_http_request_t* r, ngx_let_node_t* n
 	ngx_int_t ncap;
 
 	if (node == NULL) {
-		ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+		ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0, 
 				"let NULL node");
 		return NGX_ERROR;
 	}
@@ -336,7 +335,7 @@ static ngx_int_t ngx_let_get_node_value(ngx_http_request_t* r, ngx_let_node_t* n
 			vv = ngx_http_get_indexed_variable(r, node->index);
 				
 			if (vv == NULL || vv->not_found) {
-				ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+				ngx_log_error(NGX_LOG_ALERT, r->connection->log, 0, 
 						"let variable %d not found", node->index);
 					
 				return NGX_ERROR;
@@ -345,7 +344,7 @@ static ngx_int_t ngx_let_get_node_value(ngx_http_request_t* r, ngx_let_node_t* n
 			value->data = vv->data;
 			value->len = vv->len;
 			
-			ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+			ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
 						"let getting variable %d: '%*s'", node->index, value->len, value->data);
 
 			break;
@@ -362,7 +361,7 @@ static ngx_int_t ngx_let_get_node_value(ngx_http_request_t* r, ngx_let_node_t* n
 			value->data = r->captures_data + cap[ncap];
 			value->len = cap[ncap + 1] - cap[ncap];
 
-			ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+			ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
 						"let getting capture %d: '%*s'", node->index, value->len, value->data);
 
 			break;
@@ -371,14 +370,14 @@ static ngx_int_t ngx_let_get_node_value(ngx_http_request_t* r, ngx_let_node_t* n
 			
 			*value = node->name;
 			
-			ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+			ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
 						"let getting literal: '%*s'", value->len, value->data);
 			
 			break;
 
 		case NGX_LTYPE_FUNCTION:
 
-			ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+			ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
 						"let calling function '%*s'; argc: %d", 
 						node->name.len, node->name.data, node->args.nelts);
 			
@@ -404,7 +403,7 @@ static ngx_int_t ngx_let_get_node_value(ngx_http_request_t* r, ngx_let_node_t* n
 			
 		case NGX_LTYPE_OPERATION:
 			
-			ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+			ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
 						"let applying operation '%c'; argc: %d", node->index, node->args.nelts);
 			
 			/* parse arguments */
@@ -445,7 +444,7 @@ static ngx_int_t ngx_let_get_node_value(ngx_http_request_t* r, ngx_let_node_t* n
 				for(n = 0, s = value->data; n < args.nelts; ++n, s += astr++->len)
 					memcpy(s, astr->data, astr->len);
 				
-				ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
+				ngx_log_debug3(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, 
 						"let %d strings concatenated '%*s'", args.nelts, value->len, value->data);
 			}
 
@@ -472,7 +471,7 @@ static ngx_int_t ngx_http_let_variable(ngx_http_request_t *r,
 		v->no_cacheable = 0;
 		v->not_found = 0;
 			
-		ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "let variable accessed");
+		ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "let variable accessed");
 	}
 
 	return ret;
@@ -487,7 +486,7 @@ static char* ngx_http_let_let(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 	
 	value = cf->args->elts;
 	
-	ngx_log_debug(NGX_LOG_INFO, cf->log, 0, "let command handler");
+	ngx_log_debug0(NGX_LOG_INFO, cf->log, 0, "let command handler");
 
 	if (value[1].data[0] != '$')
 		return "needs variable as the first argument";
