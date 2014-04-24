@@ -518,6 +518,9 @@ static char* ngx_http_let_let(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 	
 	ngx_log_debug0(NGX_LOG_INFO, cf->log, 0, "let command handler");
 
+        if (value[1].len <= 1)
+		return "needs variable name";
+
 	if (value[1].data[0] != '$')
 		return "needs variable as the first argument";
 
